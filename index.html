@@ -47,8 +47,6 @@ $stmt = $pdo->query("SELECT COUNT(*) FROM users");
 $registered_users = $stmt->fetchColumn();
 // Now you can use these variables anywhere in your HTML below
 ?>
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -60,11 +58,7 @@ $registered_users = $stmt->fetchColumn();
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/style.css">
-<script src="assets/js/main.js"></script>
-
-  </head>
-
+</head>
 
 <style>
 /* Modal Base Styles */
@@ -509,81 +503,101 @@ $registered_users = $stmt->fetchColumn();
       </div>
     </div>
 
-
 <?php if ($show_login): ?>
 <!-- 🔒 LOGIN FORM -->
 <div class="hero-visual" style="
   flex: 1;
-  max-width: 400px;
+  max-width: 500px;
   min-width: 320px;
   padding: 16px;
   width: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #ffffffff, #8b5cf6);
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
   border-radius: 20px;
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.02);
 ">
   <div class="auth-card" style="
-    background: #ffffff;
-    padding: 28px 22px;
-    border-radius: 16px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-    width: 100%;
-    max-width: 360px; /* ⬅️ FORM NOW SMALLER */
+    background: #c9d4ff;
+    padding: 32px 24px;
+    border-radius: 20px;
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.08);
+    width: 5000%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     text-align: center;
     animation: fadeIn 0.5s ease-in-out;
   ">
-    <h2 style="font-size: 24px; color: #4f46e5; margin-bottom: 6px;">Welcome Back</h2>
-    <p style="color: #555; margin-bottom: 20px; font-size: 15px;">
-      Sign in to continue verifying content with AI-powered tools.
-    </p>
+    <h2 style="font-size: 26px; color: #6c63ff; margin-bottom: 8px;">Welcome Back</h2>
+    <p style="color: #666; margin-bottom: 24px;">Sign in to continue verifying content with AI-powered tools.</p>
 
-    <form action="login.php" method="POST" style="display: flex; flex-direction: column; gap: 14px;">
-      <input type="email" name="email" placeholder="Email" required style="
-        padding: 12px;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        font-size: 15px;
-      ">
-      <input type="password" name="password" placeholder="Password" required style="
-        padding: 12px;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        font-size: 15px;
-      ">
+    <form action="login.php" method="POST" style="display: flex; flex-direction: column; gap: 16px;">
+      <input type="email" name="email" placeholder="Email" required style="padding: 14px; border: 1px solid #ccc; border-radius: 10px; font-size: 16px; width: 100%; box-sizing: border-box;">
+      <input type="password" name="password" placeholder="Password" required style="padding: 14px; border: 1px solid #ccc; border-radius: 10px; font-size: 16px; width: 100%; box-sizing: border-box;">
       <button type="submit" style="
-        padding: 12px;
-        font-size: 15px;
-        border-radius: 8px;
-        background: linear-gradient(90deg, #6366f1, #8b5cf6);
+        padding: 14px;
+        font-size: 16px;
+        border-radius: 10px;
+        background: linear-gradient(90deg, #6c63ff, #9b59b6);
         color: white;
         border: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         cursor: pointer;
+        width: 100%;
+        box-sizing: border-box;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
-      " onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+      " onmouseover="this.style.transform='scale(1.02)'; this.style.boxShadow='0 6px 16px rgba(0,0,0,0.15)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'">
         Login
       </button>
     </form>
 
-    <p style="margin-top: 16px; font-size: 14px; color: black;">
+    <p style="margin-top: 20px; font-size: 14px; color: black;">
       Don't have an account?
-      <a href="#" id="open-signup" style="color: #6c63ff; font-weight: bold;">Sign up</a>
+      <a href="#" id="open-signup" style="color: #6c63ff; text-decoration: none; font-weight: bold;">Sign up</a>
     </p>
 
-    <div style="text-align: center; margin-top: 14px;">
-      <a href="index.php?guest=1" style="
-        padding: 10px;
-        border: 2px solid #6c63ff;
+    <div style="margin-top: 20px;">
+      <button style="
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 12px 20px;
+        border: 1px solid #ddd;
         border-radius: 8px;
+        background-color: white;
+        font-weight: 500;
+        font-size: 14px;
+        color: #444;
+        cursor: pointer;
+        width: 100%;
+        max-width: 280px;
+        margin: 0 auto;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        transition: background 0.2s ease;
+      " onmouseover="this.style.background='#c9d4ff'" onmouseout="this.style.background='#c9d4ff'">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google icon" style="width: 20px; height: 20px;">
+        Continue with Google
+      </button>
+    </div>
+
+    <div style="text-align: center; margin-top: 16px;">
+      <a href="index.php?guest=1" style="
+        padding: 12px;
+        border: 2px solid #6c63ff;
+        border-radius: 10px;
         color: #6c63ff;
         text-decoration: none;
         display: inline-block;
         width: 100%;
-        max-width: 240px;
+        max-width: 280px;
+        box-sizing: border-box;
         transition: all 0.2s ease;
-      " onmouseover="this.style.background='#6c63ff'; this.style.color='white'"
-        onmouseout="this.style.background='white'; this.style.color='#6c63ff'">
+      " onmouseover="this.style.background='#6c63ff'; this.style.color='white'" onmouseout="this.style.background='white'; this.style.color='#6c63ff'">
         Continue without signing in
       </a>
     </div>
@@ -622,346 +636,6 @@ $registered_users = $stmt->fetchColumn();
       </div>
     </div>
   </section>
-
-
-
-<style>
-.news-box:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 30px rgba(0,0,0,0.1);
-}
-
-.news-box.legit {
-    border-left: 5px solid #28a745;
-}
-
-.news-box.fake {
-    border-left: 5px solid #e74c3c;
-}
-
-/* Make text wrap nicely next to image */
-.news-content p {
-    font-size: 16px;
-}
-.trending-news-section {
-    position: relative;
-    z-index: 10;
-}
-
-.news-filters {
-    position: relative;
-    z-index: 9999;
-}
-
-.filter-btn {
-    cursor: pointer;
-    pointer-events: auto;
-}
-
-.filter-btn.active {
-    background: #007bff;
-    color: #fff;
-}
-
-.filter-btn:hover {
-    background: #007bff;
-    color: #fff;
-}
-
-.news-carousel-wrapper {
-    overflow: hidden;
-    border-radius: 12px;
-    background: rgba(255,255,255,0.6);
-    padding: 15px;
-    backdrop-filter: blur(6px);
-    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-}
-
-.news-carousel {
-    display: flex;
-    gap: 30px;
-    animation: scrollNews 22s linear infinite;
-}
-
-.news-carousel:hover {
-    animation-play-state: paused;
-}
-
-.news-item {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    min-width: 350px;
-}
-
-.news-thumb {
-    width: 80px;
-    height: 60px;
-    object-fit: cover;
-    border-radius: 8px;
-}
-
-.news-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: #007bff;
-    text-decoration: none;
-}
-
-.news-title:hover {
-    text-decoration: underline;
-}
-
-@keyframes scrollNews {
-    from { transform: translateX(100%); }
-    to { transform: translateX(-100%); }
-}
-
-
-</style>
-
-<!-- Trending News Carousel Section -->
-<section class="trending-news-section">
-    <div class="container">
-        <h2 class="section-title">Trending News</h2>
-
-        <!-- Category Filters -->
-        <div class="news-filters" style="margin-bottom: 20px; text-align: center;">
-            <button class="filter-btn active" data-category="ph">PH</button>
-            <button class="filter-btn" data-category="world">World</button>
-            <button class="filter-btn" data-category="technology">Tech</button>
-            <button class="filter-btn" data-category="politics">Politics</button>
-        </div>
-
-        <!-- Carousel -->
-        <div class="news-carousel-wrapper" style="overflow: hidden; position: relative;">
-            <div class="news-carousel" id="newsCarousel" style="display: flex; gap: 16px; transition: transform 0.5s ease;">
-                <div class="news-item">Loading trending news...</div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<style>
-.news-item {
-    min-width: 250px;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    overflow: hidden;
-    flex-shrink: 0;
-    text-align: left;
-    cursor: pointer;
-    color:black;
-    transition: transform 0.3s ease;
-}
-.news-item:hover {
-    transform: translateY(-5px);
-}
-.news-item img {
-    width: 100%;
-    height: 140px;
-    object-fit: cover;
-}
-.news-item h3 {
-    font-size: 16px;
-    padding: 10px;
-}
-.news-item p {
-    font-size: 12px;
-    padding: 0 10px 10px;
-    color: #666;
-}
-.news-item a {
-    display: block;
-    padding: 0 10px 10px;
-    font-weight: bold;
-    color: #007BFF;
-    text-decoration: none;
-}
-.filter-btn {
-    padding: 6px 16px;
-    margin: 0 4px;
-    border: none;
-    border-radius: 6px;
-    background: #e0e0e0;
-    cursor: pointer;
-    transition: 0.2s;
-}
-.filter-btn.active {
-    background: #007BFF;
-    color: #fff;
-}
-</style>
-
-<script>
-let currentCategory = 'ph';
-let isDragging = false;
-let startX;
-let scrollLeft;
-
-function fetchNews(category = 'ph') {
-    currentCategory = category;
-    const carousel = document.getElementById('newsCarousel');
-    carousel.innerHTML = '<div class="news-item">Loading trending news...</div>';
-
-    fetch(`get_news_db.php?category=${category}`)
-        .then(res => res.json())
-        .then(news => {
-            carousel.innerHTML = '';
-            if (!news || !news.length) {
-                carousel.innerHTML = '<div class="news-item">No news found.</div>';
-                return;
-            }
-
-            news.forEach(item => {
-                const div = document.createElement('div');
-                div.classList.add('news-item');
-                div.innerHTML = `
-                    <img src="${item.image}" alt="${item.title}" />
-                    <h3>${item.title}</h3>
-                    <p>${item.date}</p>
-                    <a href="${item.link}" target="_blank">Read More</a>
-                `;
-                carousel.appendChild(div);
-            });
-
-            enableDrag(carousel);
-        })
-        .catch(err => {
-            console.error(err);
-            carousel.innerHTML = '<div class="news-item">Failed to load news.</div>';
-        });
-}
-
-// Enable manual drag/swipe
-function enableDrag(carousel) {
-    carousel.style.cursor = 'grab';
-
-    carousel.addEventListener('mousedown', (e) => {
-        isDragging = true;
-        carousel.style.cursor = 'grabbing';
-        startX = e.pageX - carousel.offsetLeft;
-        scrollLeft = carousel.scrollLeft;
-    });
-
-    carousel.addEventListener('mouseleave', () => {
-        isDragging = false;
-        carousel.style.cursor = 'grab';
-    });
-
-    carousel.addEventListener('mouseup', () => {
-        isDragging = false;
-        carousel.style.cursor = 'grab';
-    });
-
-    carousel.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        e.preventDefault();
-        const x = e.pageX - carousel.offsetLeft;
-        const walk = (x - startX) * 2; // scroll-fast
-        carousel.scrollLeft = scrollLeft - walk;
-    });
-
-    // Touch events for mobile
-    carousel.addEventListener('touchstart', (e) => {
-        isDragging = true;
-        startX = e.touches[0].pageX - carousel.offsetLeft;
-        scrollLeft = carousel.scrollLeft;
-    });
-
-    carousel.addEventListener('touchend', () => {
-        isDragging = false;
-    });
-
-    carousel.addEventListener('touchmove', (e) => {
-        if (!isDragging) return;
-        const x = e.touches[0].pageX - carousel.offsetLeft;
-        const walk = (x - startX) * 2;
-        carousel.scrollLeft = scrollLeft - walk;
-    });
-}
-
-// Category filter buttons
-document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        fetchNews(btn.dataset.category);
-    });
-});
-
-// Initialize
-fetchNews(currentCategory);
-</script>
-
-
-
-<!-- Verified & Fake News Section with Images -->
-<section id="news-section" style="padding: 80px 0;  --bg-primary: #0f172a;">
-    <div class="container">
-        <div class="section-header" style="text-align: center; margin-bottom: 40px;">
-            <h2 class="section-title">Latest News Analysis</h2>
-            <p class="section-subtitle">Stay updated with current verified news and examples of fake news detected by VeriFact</p>
-        </div>
-
-        <div class="news-grid" style="display: flex; flex-wrap: wrap; gap: 32px; justify-content: center;">
-
-            <!-- Legit News Column -->
-            <div class="news-column" style="flex: 1; min-width: 300px; max-width: 500px;">
-                <h3 style="color: #28a745; margin-bottom: 16px;">✅ Legit News</h3>
-                <div style="display: flex; flex-direction: column; gap: 16px;">
-                    <a href="https://www.bbc.com/news/articles/c891jp9j79do" 
-            class="news-box legit" 
-            target="_blank"
-            style="display: flex; gap: 16px; align-items: center; padding: 16px; background: white; border-radius: 12px; text-decoration: none; color: #333; box-shadow: 0 8px 20px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s;">
-
-                        <img src="images/trump.png" alt="Legit News 1" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px;">
-                        <div class="news-content">
-                            <p style="margin: 0; font-weight: 600;">Trump says he will take legal action against BBC over Panorama edit</p>
-                        </div>
-                    </a>
-                    <a href="https://www.gmanetwork.com/news/topstories/nation/966215/zaldy-co-marcos-delivered-maleta-malacanan-romualdez-guteza/story/" 
-   class="news-box legit" 
-   target="_blank"
-   style="display: flex; gap: 16px; align-items: center; padding: 16px; background: white; border-radius: 12px; text-decoration: none; color: #333; box-shadow: 0 8px 20px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s;">
-
-                        <img src="images/zaldy.png" alt="Legit News 2" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px;">
-                        <div class="news-content">
-                            <p style="margin: 0; font-weight: 600;">Zaldy Co claims he personally delivered suitcases of money to Marcos, Romualdez</p>
-                        </div>
-                    </a>
-                </div>
-            </div>
-
-            <!-- Fake News Column -->
-            <div class="news-column" style="flex: 1; min-width: 300px; max-width: 500px;">
-                <h3 style="color: #e74c3c; margin-bottom: 16px;">❌ Fake News</h3>
-                <div style="display: flex; flex-direction: column; gap: 16px;">
-                    <a href="https://www.rappler.com/newsbreak/fact-check/k-12-program-not-abolished-school-year-2026-2027/" 
-   class="news-box legit" 
-   target="_blank"
-   style="display: flex; gap: 16px; align-items: center; padding: 16px; background: white; border-radius: 12px; text-decoration: none; color: #333; box-shadow: 0 8px 20px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s;">
-                    <img src="images/remove.png" alt="Legit News 2" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px;">
-                        <div class="news-content">
-                            <p style="margin: 0; font-weight: 600;">FACT CHECK: K to 12 program not abolished for school year 2026-2027</p>
-                        </div>
-                    </a>
-                    <a href="https://www.gmanetwork.com/news/topstories/nation/966215/zaldy-co-marcos-delivered-maleta-malacanan-romualdez-guteza/story/" 
-   class="news-box legit" 
-   target="_blank"
-   style="display: flex; gap: 16px; align-items: center; padding: 16px; background: white; border-radius: 12px; text-decoration: none; color: #333; box-shadow: 0 8px 20px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s;">
-
-                        <div class="news-content">
-                            <p style="margin: 0; font-weight: 600;">Fake news headline 2 goes here</p>
-                        </div>
-                    </a>
-                </div>
-            </div>
-
-        </div>
-    </div>
-</section>
 
         <!-- How It Works Section -->
         <section id="how-it-works" class="how-it-works  ">
@@ -1126,9 +800,9 @@ fetchNews(currentCategory);
             <div class="footer-content">
                 <div class="footer-section">
                     <h3>VeriFact</h3>
-                    <p>Empowering truth through AI-powered verification. Join the fight against fake news with cutting-edge technology.</p>
+                    <p>Empowering truth through AI-powered verification. Join the fight against misinformation with cutting-edge technology.</p>
                     <div class="social-links">
-                        <a href="mailto:verifactv1@gmail.com"><i class="fab fa-solid fa-envelope"></i></a>
+                        <a href="#"><i class="fab fa-twitter"></i></a>
                         <a href="#"><i class="fab fa-facebook"></i></a>
                         <a href="#"><i class="fab fa-linkedin"></i></a>
                         <a href="#"><i class="fab fa-instagram"></i></a>
@@ -1163,7 +837,7 @@ fetchNews(currentCategory);
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2025 VeriFact. All rights reserved. Fighting fake news with AI.</p>
+                <p>&copy; 2025 VeriFact. All rights reserved. Fighting misinformation with AI.</p>
             </div>
         </div>
     </footer>

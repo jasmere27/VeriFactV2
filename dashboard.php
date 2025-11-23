@@ -97,9 +97,11 @@ if (isset($_POST['update_user'])) {
     $stmt = $pdo->prepare("UPDATE users SET username = ?, email = ?, role = ? WHERE id = ?");
     $stmt->execute([$username, $email, $role, $id]);
 
-    header("Location: dashboard.php#manageUsers"); // Redirect after update
+    // Redirect to avoid resubmission and reload updated data
+    header("Location: dashboard.php#manageUsers");
     exit;
 }
+
 ?>
 <?php
 if (isset($_GET['delete'])) {
@@ -1083,10 +1085,10 @@ function buildPageLink($pageNum, $tabParam) {
     <table style="width: 100%; border-collapse: collapse; background: --gradient-primary; border-radius: 8px; overflow: hidden;">
       <thead style="background: var(--bg-card); color: white;">
         <tr>
+          <th style="padding: 12px;">id</th>
           <th style="padding: 12px;">Username</th>
           <th style="padding: 12px;">Email</th>
           <th style="padding: 12px;">Role</th>
-          <th style="padding: 12px;">Registered</th>
           <th style="padding: 12px;">Created at</th>
           <th style="padding: 12px;">Actions</th>
         </tr>
@@ -1111,31 +1113,50 @@ function buildPageLink($pageNum, $tabParam) {
 </div>
 
 <!-- Edit User Modal -->
-<div id="editUserModal" class="modal" style="display: none;">
-  <div class="modal-content">
-    <span class="close-button" onclick="closeEditUserModal()">&times;</span>
+<div id="editUserModal" class="modal" style="display: <?= isset($editUser) ? 'block' : 'none' ?>;">
+  <div class="modal-content" style="background: var(--bg-card); border-radius: var(--border-radius); padding: 24px; max-width: 500px; margin: auto; position: relative;">
+    
+    <!-- Close button -->
+    <span class="close-button" onclick="closeEditUserModal()" style="position: absolute; top: 12px; right: 16px; font-size: 24px; cursor: pointer;">&times;</span>
+    
     <?php if ($editUser): ?>
       <h3 style="margin-bottom: 16px; color: var(--text-primary);">Edit User #<?= htmlspecialchars($editUser['id']) ?></h3>
-      <form method="POST" action="?tab=manageUsers&edit=<?= htmlspecialchars($editUser['id']) ?>#manageUsers">
+      
+      <form method="POST" action="">
         <input type="hidden" name="id" value="<?= htmlspecialchars($editUser['id']) ?>">
-        <label style="display: block; margin-bottom: 10px;">Username:
-          <input type="text" name="username" value="<?= htmlspecialchars($editUser['username'] ?? '') ?>"
+        
+        <!-- Username -->
+        <label style="display: block; margin-bottom: 12px; color: var(--text-primary);">
+          Username:
+          <input type="text" name="username" value="<?= htmlspecialchars($editUser['username']) ?>" required
             style="width: 100%; padding: 10px; background: var(--bg-tertiary); border: none; border-radius: var(--border-radius); color: white;">
         </label>
-        <label style="display: block; margin-bottom: 10px;">Email:
-          <input type="email" name="email" value="<?= htmlspecialchars($editUser['email'] ?? '') ?>"
+        
+        <!-- Email -->
+        <label style="display: block; margin-bottom: 12px; color: var(--text-primary);">
+          Email:
+          <input type="email" name="email" value="<?= htmlspecialchars($editUser['email']) ?>" required
             style="width: 100%; padding: 10px; background: var(--bg-tertiary); border: none; border-radius: var(--border-radius); color: white;">
         </label>
-        <label style="display: block; margin-bottom: 16px;">Role:
-          <select name="role" required
-            style="width: 100%; padding: 10px; background: var(--bg-tertiary); border: none; border-radius: var(--border-radius); color: white;">
-            <option value="user" <?= ($editUser['role'] === 'user') ? 'selected' : '' ?>>User</option>
-            <option value="admin" <?= ($editUser['role'] === 'admin') ? 'selected' : '' ?>>Admin</option>
-          </select>
-        </label>
+        
+        <!-- Role -->
+        <label style="display:block; margin-bottom:16px;">
+  Role:
+  <select name="role" required
+    style="width:100%; padding:10px; background:var(--bg-tertiary); border:none; border-radius:var(--border-radius); color:white;">
+    <option value="0" <?= ($editUser['role'] == 0) ? 'selected' : '' ?>>User</option>
+    <option value="1" <?= ($editUser['role'] == 1) ? 'selected' : '' ?>>Admin</option>
+  </select>
+</label>
+
+        
+        <!-- Buttons -->
         <div style="text-align: right;">
-          <button type="button" onclick="closeEditUserModal()" style="margin-right: 10px; background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); padding: 8px 16px; border-radius: var(--border-radius); cursor: pointer;">Cancel</button>
-          <button type="submit" name="update_user" style="background: var(--gradient-primary); color: white; border: none; padding: 8px 16px; border-radius: var(--border-radius); cursor: pointer;">Update User</button>
+          <button type="button" onclick="closeEditUserModal()"
+            style="margin-right: 10px; background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); padding: 8px 16px; border-radius: var(--border-radius); cursor: pointer;">Cancel</button>
+          
+          <button type="submit" name="update_user"
+            style="background: var(--gradient-primary); color: white; border: none; padding: 8px 16px; border-radius: var(--border-radius); cursor: pointer;">Update User</button>
         </div>
       </form>
     <?php else: ?>
@@ -1143,6 +1164,8 @@ function buildPageLink($pageNum, $tabParam) {
     <?php endif; ?>
   </div>
 </div>
+
+
 
 <script>
 function closeEditUserModal() {

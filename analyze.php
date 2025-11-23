@@ -16,17 +16,58 @@ $apiService = new ApiService();
 
 // Initialize history if result is set
 if ($result && isset($type, $content)) {
+
+    // -----------------------------------------
+    // ✔ 1. Format the values for saving
+    // -----------------------------------------
+    $date       = date('Y-m-d H:i:s');
+    $resultText = $result['is_fake'] ? 'Fake' : 'Legit';
+    $confidence = $result['confidence'] ?? null;
+    $summary    = $result['explanation'] ?? null;
+    $contentClean = $type === 'image'
+        ? '[Image Analysis]'
+        : substr($content, 0, 100) . (strlen($content) > 100 ? '...' : '');
+
+    // -----------------------------------------
+    // ✔ 2. Save to database if logged in
+    // -----------------------------------------
+    if (isset($_SESSION['users_id'])) {
+        $userId = $_SESSION['users_id'];
+
+        $stmt = $conn->prepare("
+            INSERT INTO analysis_history (user_id, date, type, content, result, confidence, summary, image_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+
+        $stmt->bind_param(
+            "issssdss",
+            $userId,
+            $date,
+            $type,
+            $contentClean,
+            $resultText,
+            $confidence,
+            $summary,
+            $uploaded_image_path
+        );
+
+        $stmt->execute();
+    }
+
+    // -----------------------------------------
+    // ✔ 3. (Optional) Keep storing in session
+    // -----------------------------------------
     if (!isset($_SESSION['history'])) {
         $_SESSION['history'] = [];
     }
 
     $_SESSION['history'][] = [
-        'date'       => date('Y-m-d H:i:s'),
+        'date'       => $date,
         'type'       => $type,
-        'content'    => $type === 'image' ? '[Image Analysis]' : substr($content, 0, 100) . (strlen($content) > 100 ? '...' : ''),
-        'result'     => $result['is_fake'] ? 'Fake' : 'Legit',
-        'confidence' => $result['confidence'] ?? null,
-        'explanation'=> $result['explanation'] ?? null,
+        'content'    => $contentClean,
+        'result'     => $resultText,
+        'confidence' => $confidence,
+        'explanation'=> $summary,
         'image_path' => $type === 'image' ? ($uploaded_image_path ?? null) : null
     ];
 
@@ -36,6 +77,7 @@ if ($result && isset($type, $content)) {
         $uploaded_image_path = null;
     }
 }
+
 
 // Handle form submission
 $active_tab = $_POST['active_tab'] ?? 'text'; 
@@ -82,38 +124,75 @@ if ($_POST) {
                 unset($_SESSION['last_uploaded_image']); // clear image
                 break;
 
-            case 'image':
-                if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
-                    throw new Exception('Please upload a valid image file.');
-                }
+        
+    case 'image':
+    try {
+        // Check file upload
+        if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
+            throw new Exception('Please upload a valid image file.');
+        }
 
-                $upload_dir = 'uploads/';
-                if (!file_exists($upload_dir)) {
-                    mkdir($upload_dir, 0777, true);
-                }
+        // Ensure upload directory exists
+        $upload_dir = 'uploads/';
+        if (!file_exists($upload_dir)) {
+            mkdir($upload_dir, 0777, true);
+        }
 
-                $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-                $uploaded_image_path = $upload_dir . uniqid('img_') . '.' . $file_extension;
+        // Generate unique filename
+        $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
+        $uploaded_image_path = $upload_dir . uniqid('img_') . '.' . $file_extension;
 
-                if (!move_uploaded_file($_FILES['image']['tmp_name'], $uploaded_image_path)) {
-                    throw new Exception('Failed to save uploaded image.');
-                }
+        if (!move_uploaded_file($_FILES['image']['tmp_name'], $uploaded_image_path)) {
+            throw new Exception('Failed to save uploaded image.');
+        }
 
-                // Store path in session
-                $_SESSION['last_uploaded_image'] = $uploaded_image_path;
+        // Store path in session
+        $_SESSION['last_uploaded_image'] = $uploaded_image_path;
 
-                // OCR
-                $tesseractPath = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe";
-                $command = "\"$tesseractPath\" " . escapeshellarg($uploaded_image_path) . " stdout 2>&1";
-                $ocrText = shell_exec($command);
-                $content = trim($ocrText);
+        // OCR using Tesseract
+        $tesseractPath = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe";
+        $command = "\"$tesseractPath\" " . escapeshellarg($uploaded_image_path) . " stdout 2>&1";
+        $ocrText = shell_exec($command);
+        $content = trim($ocrText);
 
-                if (empty($content)) {
-                    throw new Exception('No text detected in image.');
-                }
+        if (empty($content)) {
+            throw new Exception('No text detected in image.');
+        }
 
-                $result = $apiService->analyzeText($content);
-                break;
+        // Send extracted text to API service
+        $result = $apiService->analyzeText($content);
+
+        // --- CLEAN USER INSTRUCTION RESULT ---
+        $aiOutput = $result['explanation'] ?? '';
+        $instructionResult = '';
+        $analysisResult = $aiOutput;
+
+        if (strpos($aiOutput, 'User Instruction Result:') !== false) {
+            $parts = explode('News Analysis Result:', $aiOutput);
+            $instructionResult = trim(str_replace('User Instruction Result:', '', $parts[0]));
+            $analysisResult = isset($parts[1]) ? trim($parts[1]) : '';
+
+            // Remove asterisks, hyphens, and empty lines
+            $lines = explode("\n", $instructionResult);
+            $lines = array_filter(array_map(fn($line) => trim(str_replace(['*','-'],'',$line)), $lines));
+            $instructionResult = implode("\n", $lines);
+        }
+
+        // Fallback: if user provided instruction but AI output empty
+        if (empty($instructionResult) && !empty($_POST['instruction'])) {
+            $instructionResult = "Instruction executed: " . htmlspecialchars($_POST['instruction']);
+        }
+
+    } catch (Exception $e) {
+        $result = [
+            'error' => true,
+            'message' => 'Failed to analyze image: ' . $e->getMessage()
+        ];
+        $instructionResult = '';
+        $analysisResult = '';
+    }
+    break;
+
 
             case 'audio':
                 if (!isset($_FILES['audio']) || $_FILES['audio']['error'] !== UPLOAD_ERR_OK) {
@@ -316,8 +395,7 @@ $show_login = !$is_logged_in && !$is_guest;
 </style>
 </head>
 <body>
-
-    <header class="header">
+<header class="header">
   <div class="container" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; padding: 16px;">
     
     <!-- Logo -->
@@ -333,27 +411,39 @@ $show_login = !$is_logged_in && !$is_guest;
     <!-- Mobile Hamburger -->
     <button class="menu-toggle" onclick="toggleMenu()">☰</button>
 
-    <!-- Mobile Nav -->
-    <nav class="navbar">
-      <ul class="nav-links" id="navMenu">
-        <li><a href="index.php">Home</a></li>
-        <li><a href="analyze.php">Fact-Checker</a></li>
-        <li><a href="cyberSecurity.php">CyberSecurity</a></li>
-        <li><a href="#contact">Contact</a></li>
-      </ul>
-    </nav>
+<!-- Mobile Nav -->
+<nav class="navbar">
+  <ul class="nav-links" id="navMenu">
+    <li><a href="index.php">Home</a></li>
+    <li><a href="analyze.php">Fact-Checker</a></li>
+    <li><a href="cyberSecurity.php">CyberSecurity</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ul>
+</nav>
 
 <!-- Desktop Nav -->
 <nav class="nav-menu">
-  <a href="index.php" class="nav-link ">Home</a>
-  <a href="analyze.php" class="nav-link active">Fact-Checker</a>
-  <a href="cyberSecurity.php" class="nav-link">CyberSecurity</a>
+  <a href="index.php" class="nav-link ">
+    <i class="fas fa-home"></i> Home
+  </a>
 
-  <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
-    <a href="dashboard.php" class="nav-link">Dashboard</a>
+  <a href="analyze.php" class="nav-link active">
+    <i class="fas fa-search"></i> Fact-Checker
+  </a>
+
+  <a href="cyberSecurity.php" class="nav-link">
+    <i class="fas fa-shield-alt"></i> CyberSecurity
+  </a>
+
+  <?php if (!empty($_SESSION['role']) && $_SESSION['role'] == 1): ?>
+    <a href="dashboard.php" class="nav-link ">
+      <i class="fas fa-tachometer-alt"></i> Dashboard
+    </a>
   <?php endif; ?>
 
-  <a href="#contact" class="nav-link">Contact</a>
+  <a href="#contact" class="nav-link">
+    <i class="fas fa-envelope"></i> Contact
+  </a>
 
   <?php if (!$is_logged_in): ?>
     <a href="index.php?remove_guest=1" class="nav-link" style="margin-left:auto; font-weight: bold;">Sign In</a>
@@ -419,7 +509,7 @@ $show_login = !$is_logged_in && !$is_guest;
         <div class="container">
             <div class="page-header">
                 <h1>Verify Content</h1>
-                <p>Upload text, images, or audio to check for misinformation using our AI-powered analysis</p>
+                <p>Check the truth behind text, images, or audio with our intelligent AI verification system</p>
             </div>
 
             <?php if ($error_message): ?>
@@ -489,22 +579,53 @@ $show_login = !$is_logged_in && !$is_guest;
             </label>
 
             <div class="file-upload-area" onclick="document.getElementById('image-upload').click()">
-                <div class="upload-content">
+                <div class="upload-content" id="upload-text">
                     <i class="fas fa-cloud-upload-alt"></i>
                     <h3>Drag & drop or click to upload</h3>
                     <p>Support for JPG, PNG, WebP files up to 10MB</p>
                 </div>
                 <input type="file" id="image-upload" name="image" accept="image/*" style="display: none;" required>
             </div>
+
+            <!-- Image Preview -->
+            <div id="image-preview" style="display: none; text-align: center; margin-top: 15px;">
+                <img id="preview-img" src="" alt="Preview" style="max-width: 100%; max-height: 300px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+            </div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-lg">
+        <!-- User Instruction -->
+<div class="input-group" style="margin-top: 20px;">
+    <label>
+        <i class="fas fa-edit"></i> Optional Instructions for the AI
+    </label>
+
+    <textarea name="instruction" 
+        placeholder="Example: Extract the text only and summarize it... 
+Or: Translate the detected text to English...
+Or: Check if the image was modified..."
+        style="
+            width: 100%;
+            height: 140px;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid #d1d5db;
+            resize: vertical;
+            font-size: 1rem;
+            font-family: 'Inter', sans-serif;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        "></textarea>
+
+    <small style="color: #6b7280; margin-top: 4px; display: block;">
+        This is optional – tell the AI what to do with the uploaded image.
+    </small>
+</div>
+
+        <button type="submit" class="btn btn-primary btn-lg" style="margin-top: 10px;">
             <i class="fas fa-image"></i>
             Analyze Image
         </button>
     </form>
 </div>
-
 
 <script>
 document.getElementById('image-upload').addEventListener('change', function(event) {
@@ -520,6 +641,8 @@ document.getElementById('image-upload').addEventListener('change', function(even
     }
 });
 </script>
+
+
 
 
 <script>
@@ -711,48 +834,78 @@ if (isset($_POST['type']) && $_POST['type'] === 'image' && isset($_FILES['image'
 <!-- RESULTS MODAL -->
 <div id="resultsModal" class="modal-overlay" style="
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.6);
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    backdrop-filter: blur(2px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 9999;
 ">
+
     <div class="modal-content" id="modalContent" style="
-        background: var(--bg-card, #fff);
-        border-radius: 16px;
-        max-width: 900px;
+        background: #ffffff; /* PURE WHITE */
+        border-radius: 20px;
         width: 95%;
+        max-width: 900px;
         max-height: 90%;
         overflow-y: auto;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-        padding: 32px;
+
+        /* CLEAN MODERN CARD LOOK */
+        box-shadow: 
+            0 4px 12px rgba(0,0,0,0.08),
+            0 8px 24px rgba(0,0,0,0.12);
+
+        padding: 28px 34px;
         position: relative;
-        animation: fadeInScale 0.3s ease;
+        animation: fadeInScale 0.25s ease;
+        font-family: 'Inter', sans-serif;
     ">
 
         <!-- Close Button -->
         <button onclick="closeResultsModal()" style="
             position: absolute;
-            top: 12px;
-            right: 12px;
-            background: none;
+            top: 14px;
+            right: 14px;
+            background: #f3f4f6;
             border: none;
-            font-size: 1.5rem;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
             cursor: pointer;
-            color: var(--text-primary);
-        ">
+            font-size: 1.2rem;
+            color: #374151;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .2s ease;
+        " 
+        onmouseover="this.style.background='#e5e7eb'"
+        onmouseout="this.style.background='#f3f4f6'">
             <i class="fas fa-times"></i>
         </button>
 
-        <div class="result-header" style="margin-bottom: 1rem;">
-            <h2 style="margin: 0; display: flex; align-items: center; gap: 10px;">
-                <i class="fas fa-brain"></i> Analysis Complete
+        <!-- Header -->
+        <div class="result-header" style="
+            margin-bottom: 1.4rem; 
+            display: flex; 
+            align-items: center; 
+            gap: 10px;
+        ">
+            <h2 style="
+                margin: 0;
+                font-size: 1.6rem;
+                font-weight: 700;
+                color: #111827;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            ">
+                <i class="fas fa-brain" style="color:#3b82f6;"></i>
+                Analysis Complete
             </h2>
         </div>
+
 
         <!-- IMAGE PREVIEW -->
         <?php if (!empty($_SESSION['last_uploaded_image'])): ?>
@@ -831,7 +984,9 @@ $offset = $circumference - ($confidence / 100 * $circumference);
     position: relative;
     font-weight: bold;
     text-align: center;
+    color: black;
     flex-direction: column;
+    background: black;
 }
 .confidence-circle.fake { color: red; }
 .confidence-circle.legit { color: green; }
@@ -852,91 +1007,228 @@ $offset = $circumference - ($confidence / 100 * $circumference);
 .confidence-text {
     position: absolute;
     text-align: center;
+    color: #000; /* ✅ Make all text inside (percentage + label) black */
 }
-.percentage { font-size: 1.2rem; display: block; }
-.label { font-size: 0.9rem; }
+.percentage { 
+    font-size: 1.2rem; 
+    display: block; 
+}
+.label { 
+    font-size: 0.9rem; 
+    /* color removed here because .confidence-text sets it */ 
+}
 </style>
 
 
-<!-- ✅ AI ANALYSIS -->
-<div class="result-explanation" id="aiAnalysis">
-    <h3><i class="fas fa-brain"></i> AI Analysis</h3>
-    <div>
-        <pre id="analysisText"><?php echo htmlspecialchars($result['explanation']); ?></pre>
-    </div>
+<?php
+$aiOutput = $result['explanation'] ?? '';
+$instructionResult = '';
+$analysisResult = $aiOutput;
+
+// Detect and separate instruction part
+if (strpos($aiOutput, 'User Instruction Result:') !== false && strpos($aiOutput, 'News Analysis Result:') !== false) {
+    $parts = explode('News Analysis Result:', $aiOutput);
+    $instructionResult = trim(str_replace('User Instruction Result:', '', $parts[0]));
+    $analysisResult = isset($parts[1]) ? trim($parts[1]) : '';
+
+    // --- CLEAN INSTRUCTION RESULT ---
+    $lines = explode("\n", $instructionResult);
+    $lines = array_map(fn($line) => trim(str_replace('*','',$line)), $lines);
+    $lines = array_filter($lines, fn($line) => !empty($line));
+    $instructionResult = implode("\n", $lines);
+
+    // --- CLEAN ANALYSIS RESULT ---
+    $lines = explode("\n", $analysisResult);
+    $lines = array_map(fn($line) => trim(str_replace('*','',$line)), $lines);
+    $lines = array_filter($lines, fn($line) => !empty($line));
+    $analysisResult = implode("\n", $lines);
+}
+?>
+
+
+<!-- 🧭 USER INSTRUCTION RESULT (only shown if available) -->
+<?php if (!empty($instructionResult)): ?>
+<div class="instruction-result" style="margin-top: 20px; font-family: 'Inter', sans-serif;">
+  <h3 style="
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #059669;
+    font-weight: 600;
+  ">
+    <i class="fas fa-lightbulb"></i> User Instruction Result
+  </h3>
+  <div style="overflow-x: hidden; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6; color: #064e3b;">
+    <?php 
+        // Render HTML links properly without escaping
+        echo $instructionResult; 
+    ?>
+  </div>
+</div>
+<?php endif; ?>
+
+
+<!-- 🧠 AI ANALYSIS RESULT -->
+<div class="result-explanation" id="aiAnalysis" style="margin-top: 25px; font-family: 'Inter', 'Roboto', sans-serif;">
+  <h3 style="
+    font-size: 1.4rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #1e40af;
+    font-weight: 600;
+  ">
+    <i class="fas fa-brain"></i> AI Analysis
+  </h3>
+  <div id="analysisText" style="
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: hidden;
+  background: #f9fafb;
+  padding: 18px;
+  border-radius: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #111827;
+  border-left: 4px solid #2563eb;
+  font-family: 'Inter', 'Roboto Mono', monospace;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+">
+  <?php echo $analysisResult; ?>
+  </div>
 </div>
 
 <!-- 🔈 SPEAK BUTTON -->
+<?php if(!empty($analysisResult)): ?>
 <div style="margin-top: 10px;">
-    <button id="speakBtn" onclick="speakResult()" style="
-        background: #2563eb;
-        color: white;
-        border: none;
-        padding: 10px 18px;
-        border-radius: 8px;
-        font-size: 1rem;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-    ">
-        <i class="fas fa-volume-up"></i> Read Aloud
-    </button>
+  <button id="speakBtn" onclick="speakResult()" style="
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.3s;
+  " onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#2563eb'">
+    <i class="fas fa-volume-up"></i> Read Aloud
+  </button>
 </div>
+<?php endif; ?>
 
 <!-- 🔒 CYBERSECURITY TIPS -->
 <?php if (!empty($result['cybersecurity_tips'])): ?>
-    <div class="cybersecurity-tips" style="margin-top: 20px;">
-        <button onclick="toggleTips()" class="dropdown-toggle" style="display: flex; align-items: center; gap: 10px; background: none; border: none; font-size: 1.2rem; color: var(--text-primary); cursor: pointer;">
-            <i class="fas fa-shield-alt"></i> 
-            <span>Cybersecurity Tips (<?= ucfirst($result['type'] ?? 'General') ?>)</span>
-            <i id="arrowIcon" class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
-        </button>
-        <div id="tipsContent" style="margin-top: 16px; max-height: 0; overflow: hidden; transition: max-height 0.5s ease, opacity 0.3s ease; opacity: 0;">
-            <div class="tips-grid" style="display: grid; gap: 16px; background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: var(--border-radius-lg); padding: 24px;">
-                <?php foreach ($result['cybersecurity_tips'] as $index => $tip): ?>
-                    <div class="tip-card" style="display: flex; gap: 12px; padding: 16px; background: rgba(255, 255, 255, 0.05); border-radius: 8px;">
-                        <div class="tip-number" style="width: 24px; height: 24px; background: var(--gradient-primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">
-                            <?php echo $index + 1; ?>
-                        </div>
-                        <div class="tip-content">
-                            <p style="margin: 0; color: var(--text-secondary);"><?php echo htmlspecialchars($tip); ?></p>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
+<div class="cybersecurity-tips" style="margin-top: 20px; font-family: 'Inter', sans-serif;">
+  <button onclick="toggleTips()" class="dropdown-toggle" style="
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    color: #000000ff;
+    cursor: pointer;
+    font-weight: 600;
+  ">
+    <i class="fas fa-shield-alt" style="color: #f59e0b;"></i>
+    <span>Cybersecurity Tips (<?= ucfirst($result['type'] ?? 'General') ?>)</span>
+    <i id="arrowIcon" class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
+  </button>
+
+  <div id="tipsContent" style="
+    margin-top: 16px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease, opacity 0.3s ease;
+    opacity: 0;
+  ">
+    <div class="tips-grid" style="
+      display: grid;
+      gap: 16px;
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid #f59e0b;
+      border-radius: 12px;
+      padding: 24px;
+    ">
+      <?php foreach ($result['cybersecurity_tips'] as $index => $tip): ?>
+      <div class="tip-card" style="
+        display: flex;
+        gap: 12px;
+        padding: 16px;
+        background: #fff8e1;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      ">
+        <div class="tip-number" style="
+          width: 26px;
+          height: 26px;
+          background: linear-gradient(135deg, #f59e0b, #d97706);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+          font-weight: 700;
+          color: white;
+          flex-shrink: 0;
+        ">
+          <?php echo $index + 1; ?>
         </div>
+        <div class="tip-content" style="color: #374151; font-size: 0.95rem;">
+          <p style="margin: 0;"><?php echo htmlspecialchars($tip); ?></p>
+        </div>
+      </div>
+      <?php endforeach; ?>
     </div>
+  </div>
+</div>
 <?php endif; ?>
 
 <!-- ✅ TRUSTED SOURCES -->
-<div class="trusted-sources" style="margin-top: 20px;">
-    <h3 style="display: flex; align-items: center; gap: 8px; color: var(--primary-blue);">
-        <i class="fas fa-check-circle"></i> Trusted Sources
-    </h3>
-    <div class="sources-list" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px;">
-        <?php foreach ($result['sources'] as $source): ?>
-            <a href="<?php echo htmlspecialchars($source['url']); ?>" 
-               target="_blank" 
-               rel="noopener noreferrer"
-               class="source-link" 
-               style="
-                   display: flex; 
-                   align-items: center; 
-                   gap: 8px; 
-                   padding: 12px; 
-                   background: rgba(59, 130, 246, 0.1); 
-                   border: 1px solid var(--primary-blue); 
-                   border-radius: 8px; 
-                   color: var(--primary-blue); 
-                   text-decoration: none; 
-                   transition: all 0.25s ease;
-               ">
-                <i class="fas fa-external-link-alt"></i>
-                <span><?php echo htmlspecialchars($source['name']); ?></span>
-            </a>
-        <?php endforeach; ?>
-    </div>
+<div class="trusted-sources" style="margin-top: 20px; font-family: 'Inter', sans-serif;">
+  <h3 style="
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #1e40af;
+    font-size: 1.4rem;
+    font-weight: 700;
+  ">
+    <i class="fas fa-check-circle" style="color: #22c55e;"></i> Trusted Sources
+  </h3>
+
+  <div class="sources-list" style="
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+  ">
+    <?php foreach ($result['sources'] as $source): ?>
+    <a href="<?php echo htmlspecialchars($source['url']); ?>" target="_blank" rel="noopener noreferrer" class="source-link" style="
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px;
+      background: #e0f2fe;
+      border: 1.5px solid #0284c7;
+      border-radius: 10px;
+      color: #000000ff;
+      text-decoration: none;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    " onmouseover="this.style.background='#bae6fd'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='#e0f2fe'; this.style.transform='none';">
+      <i class="fas fa-external-link-alt"></i>
+      <span><?php echo htmlspecialchars($source['name']); ?></span>
+    </a>
+    <?php endforeach; ?>
+  </div>
 </div>
 
 <!-- Optional Hover Effect -->
@@ -949,14 +1241,16 @@ $offset = $circumference - ($confidence / 100 * $circumference);
     .source-link:hover i {
         color: white;
     }
+
+    
 </style>
 
 <!-- ✅ DOWNLOAD BUTTON -->
 <div style="margin-top: 24px; text-align: right;">
     <button onclick="downloadResult()" style="
-        background: white;
+        background: blue;
         border: none;
-        color: black;
+        color: white;
         padding: 10px 18px;
         border-radius: 8px;
         font-size: 1rem;
@@ -1016,7 +1310,7 @@ $offset = $circumference - ($confidence / 100 * $circumference);
             margin: 0.5,
             filename: 'VeriFact_Analysis_Result.pdf',
             image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2 },
+            html2canvas: { scale: 3 },
             jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
         };
         html2pdf().set(options).from(modal).save();
@@ -1038,7 +1332,7 @@ $offset = $circumference - ($confidence / 100 * $circumference);
             <div class="footer-content">
                 <div class="footer-section">
                     <h3>VeriFact</h3>
-                    <p>Empowering truth through AI-powered verification. Join the fight against misinformation with cutting-edge technology.</p>
+                    <p>Empowering truth through AI-powered verification. Join the fight against fake news with cutting-edge technology.</p>
                     <div class="social-links">
                         <a href="#"><i class="fab fa-twitter"></i></a>
                         <a href="#"><i class="fab fa-facebook"></i></a>
@@ -1075,7 +1369,7 @@ $offset = $circumference - ($confidence / 100 * $circumference);
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2025 VeriFact. All rights reserved. Fighting misinformation with AI.</p>
+                <p>&copy; 2025 VeriFact. All rights reserved. Fighting fake news with AI.</p>
             </div>
         </div>
     </footer>
