@@ -127,18 +127,18 @@ if ($_POST) {
         
     case 'image':
     try {
-        // Check file upload
+        // --- Check file upload ---
         if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
             throw new Exception('Please upload a valid image file.');
         }
 
-        // Ensure upload directory exists
+        // --- Ensure upload directory exists ---
         $upload_dir = 'uploads/';
         if (!file_exists($upload_dir)) {
             mkdir($upload_dir, 0777, true);
         }
 
-        // Generate unique filename
+        // --- Generate unique filename ---
         $file_extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
         $uploaded_image_path = $upload_dir . uniqid('img_') . '.' . $file_extension;
 
@@ -146,41 +146,39 @@ if ($_POST) {
             throw new Exception('Failed to save uploaded image.');
         }
 
-        // Store path in session
+        // --- Store path in session ---
         $_SESSION['last_uploaded_image'] = $uploaded_image_path;
 
-        // OCR using Tesseract
-        $tesseractPath = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe";
-        $command = "\"$tesseractPath\" " . escapeshellarg($uploaded_image_path) . " stdout 2>&1";
-        $ocrText = shell_exec($command);
-        $content = trim($ocrText);
+        // --- Optional user instruction ---
+        $userInstruction = trim($_POST['instruction'] ?? '');
 
-        if (empty($content)) {
-            throw new Exception('No text detected in image.');
-        }
+        // --- Analyze image with OCR + user instruction ---
+        $result = $apiService->analyzeImageWithLocalOCR($uploaded_image_path, $userInstruction);
 
-        // Send extracted text to API service
-        $result = $apiService->analyzeText($content);
-
-        // --- CLEAN USER INSTRUCTION RESULT ---
+        // --- Prepare User Instruction and Analysis Result ---
         $aiOutput = $result['explanation'] ?? '';
         $instructionResult = '';
         $analysisResult = $aiOutput;
 
-        if (strpos($aiOutput, 'User Instruction Result:') !== false) {
+        if (strpos($aiOutput, 'User Instruction Result:') !== false && strpos($aiOutput, 'News Analysis Result:') !== false) {
             $parts = explode('News Analysis Result:', $aiOutput);
-            $instructionResult = trim(str_replace('User Instruction Result:', '', $parts[0]));
-            $analysisResult = isset($parts[1]) ? trim($parts[1]) : '';
 
-            // Remove asterisks, hyphens, and empty lines
+            // Extract and clean instruction part
+            $instructionResult = trim(str_replace('User Instruction Result:', '', $parts[0]));
             $lines = explode("\n", $instructionResult);
             $lines = array_filter(array_map(fn($line) => trim(str_replace(['*','-'],'',$line)), $lines));
             $instructionResult = implode("\n", $lines);
+
+            // Extract and clean analysis part
+            $analysisResult = isset($parts[1]) ? trim($parts[1]) : '';
+            $lines = explode("\n", $analysisResult);
+            $lines = array_filter(array_map(fn($line) => trim(str_replace(['*','-'],'',$line)), $lines));
+            $analysisResult = implode("\n", $lines);
         }
 
-        // Fallback: if user provided instruction but AI output empty
-        if (empty($instructionResult) && !empty($_POST['instruction'])) {
-            $instructionResult = "Instruction executed: " . htmlspecialchars($_POST['instruction']);
+        // --- Fallback: display instruction if AI did not output it ---
+        if (empty($instructionResult) && !empty($userInstruction)) {
+            $instructionResult = "Instruction executed: " . htmlspecialchars($userInstruction);
         }
 
     } catch (Exception $e) {
@@ -192,6 +190,7 @@ if ($_POST) {
         $analysisResult = '';
     }
     break;
+
 
 
             case 'audio':
@@ -541,11 +540,15 @@ $show_login = !$is_logged_in && !$is_guest;
 <div id="text-tab" class="tab-content active">
     <form method="POST" class="analyzer-form">
         <input type="hidden" name="type" value="text">
+
         <div class="input-group">
             <label for="text-content">
                 <i class="fas fa-edit"></i> 
                 Paste news article, headline, or URL
             </label>
+            <p style="font-size: 0.9rem; color: #ffffffff; margin:5px 0;">
+                Tip: If you have any special instructions (e.g., summarize, translate, find sources), type them at the start of your content before pasting URLs or news text.
+            </p>
             <div class="textarea-container">
                 <textarea 
                     id="text-content" 
@@ -559,6 +562,7 @@ $show_login = !$is_logged_in && !$is_guest;
                 </button>
             </div>
         </div>
+
         <button type="submit" class="btn btn-primary btn-lg">
             <i class="fas fa-search"></i>
             Analyze Text
@@ -566,63 +570,47 @@ $show_login = !$is_logged_in && !$is_guest;
     </form>
 </div>
 
+
 <!-- Image Checker Tab -->
 <div id="image-tab" class="tab-content">
     <form method="POST" enctype="multipart/form-data" class="analyzer-form">
-        <!-- Important: This tells PHP that this request is for image analysis -->
         <input type="hidden" name="type" value="image">
-        
+
+        <!-- User Instruction -->
+        <div class="input-group">
+            <label for="image-instruction">
+                <i class="fas fa-lightbulb"></i> Optional instruction for AI
+            </label>
+            <input type="text" name="instruction" id="image-instruction" 
+                   placeholder="Type your instruction before uploading an image..." 
+                   style="width:100%; padding:8px; margin-bottom:10px; background:white; border:1px solid #ccc; border-radius:5px;">
+        </div>
+
+        <!-- File Upload -->
         <div class="input-group">
             <label>
-                <i class="fas fa-images"></i> 
-                Upload image-based news content
+                <i class="fas fa-images"></i> Upload image-based news content
             </label>
-
-            <div class="file-upload-area" onclick="document.getElementById('image-upload').click()">
+            <div class="file-upload-area" onclick="document.getElementById('image-upload').click()" 
+                 style="cursor:pointer; border:2px dashed #ccc; padding:20px; text-align:center; border-radius:10px;">
                 <div class="upload-content" id="upload-text">
-                    <i class="fas fa-cloud-upload-alt"></i>
+                    <i class="fas fa-cloud-upload-alt" style="font-size:24px;"></i>
                     <h3>Drag & drop or click to upload</h3>
                     <p>Support for JPG, PNG, WebP files up to 10MB</p>
                 </div>
-                <input type="file" id="image-upload" name="image" accept="image/*" style="display: none;" required>
+                <input type="file" id="image-upload" name="image" accept="image/*" style="display:none;" required>
             </div>
 
             <!-- Image Preview -->
-            <div id="image-preview" style="display: none; text-align: center; margin-top: 15px;">
-                <img id="preview-img" src="" alt="Preview" style="max-width: 100%; max-height: 300px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+            <div id="image-preview" style="display:none; text-align:center; margin-top:15px;">
+                <img id="preview-img" src="" alt="Preview" 
+                     style="max-width:100%; max-height:300px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.2);">
             </div>
         </div>
 
-        <!-- User Instruction -->
-<div class="input-group" style="margin-top: 20px;">
-    <label>
-        <i class="fas fa-edit"></i> Optional Instructions for the AI
-    </label>
-
-    <textarea name="instruction" 
-        placeholder="Example: Extract the text only and summarize it... 
-Or: Translate the detected text to English...
-Or: Check if the image was modified..."
-        style="
-            width: 100%;
-            height: 140px;
-            padding: 12px;
-            border-radius: 10px;
-            border: 1px solid #d1d5db;
-            resize: vertical;
-            font-size: 1rem;
-            font-family: 'Inter', sans-serif;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        "></textarea>
-
-    <small style="color: #6b7280; margin-top: 4px; display: block;">
-        This is optional – tell the AI what to do with the uploaded image.
-    </small>
-</div>
-
-        <button type="submit" class="btn btn-primary btn-lg" style="margin-top: 10px;">
-            <i class="fas fa-image"></i>
-            Analyze Image
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-primary btn-lg" style="margin-top:10px;">
+            <i class="fas fa-image"></i> Analyze Image
         </button>
     </form>
 </div>
@@ -638,6 +626,9 @@ document.getElementById('image-upload').addEventListener('change', function(even
             document.getElementById('upload-text').style.display = 'none';
         };
         reader.readAsDataURL(file);
+    } else {
+        document.getElementById('image-preview').style.display = 'none';
+        document.getElementById('upload-text').style.display = 'block';
     }
 });
 </script>
@@ -919,20 +910,37 @@ if (isset($_POST['type']) && $_POST['type'] === 'image' && isset($_FILES['image'
         <?php endif; ?>
 
 <?php
-$confidence = isset($result['confidence']) ? $result['confidence'] : 0;
-$label = isset($result['label']) ? strtolower($result['label']) : '';
-$isFake = !empty($result['is_fake']); 
+// Ensure confidence and AI classification exist
+$confidence = isset($result['confidence']) ? intval($result['confidence']) : 0;
+$classification = isset($result['classification']) ? strtolower($result['classification']) : 'unverified';
 
-if ($isFake) {
-    $class = 'fake';
-} elseif ($confidence == 50) {
-    $class = 'mixed';
-} elseif (strpos($label, 'uncertain') !== false || $confidence == 0) {
-    $class = 'uncertain';
-} else {
-    $class = 'legit';
+// Map AI classification to label and CSS class
+switch ($classification) {
+    case 'fake':
+    case 'likely fake':
+        $label = 'Fake';
+        $class = 'fake';
+        break;
+    case 'real':
+    case 'likely real':
+        $label = 'Legit';
+        $class = 'legit';
+        break;
+    case 'mixed':
+        $label = 'Mixed';
+        $class = 'mixed';
+        $confidence = 50; // Ensure mixed is always 50%
+        break;
+    case 'uncertain':
+    case 'unverified':
+    default:
+        $label = 'Uncertain';
+        $class = 'uncertain';
+        $confidence = 0; // Uncertain/unverified always 0%
+        break;
 }
 
+// Circle calculations
 $radius = 54;
 $circumference = 2 * M_PI * $radius;
 $offset = $circumference - ($confidence / 100 * $circumference);
@@ -961,13 +969,11 @@ $offset = $circumference - ($confidence / 100 * $circumference);
             </circle>
         </svg>
         <div class="confidence-text">
-            <?php if ($confidence == 50): ?>
-                <span class="label">Mixed</span>
-            <?php elseif ($confidence == 0): ?>
-                <span class="label">Uncertain</span>
+            <?php if ($class === 'mixed' || $class === 'uncertain'): ?>
+                <span class="label"><?php echo $label; ?></span>
             <?php else: ?>
                 <span class="percentage"><?php echo $confidence; ?>%</span>
-                <span class="label"><?php echo ucfirst($label); ?></span>
+                <span class="label"><?php echo $label; ?></span>
             <?php endif; ?>
         </div>
     </div>
@@ -992,6 +998,7 @@ $offset = $circumference - ($confidence / 100 * $circumference);
 .confidence-circle.legit { color: green; }
 .confidence-circle.mixed { color: transparent; }
 .confidence-circle.uncertain { color: gray; }
+
 .progress-ring-bg {
     fill: transparent;
     stroke: #ddd;
@@ -1007,7 +1014,7 @@ $offset = $circumference - ($confidence / 100 * $circumference);
 .confidence-text {
     position: absolute;
     text-align: center;
-    color: #000; /* ✅ Make all text inside (percentage + label) black */
+    color: #000;
 }
 .percentage { 
     font-size: 1.2rem; 
@@ -1015,58 +1022,55 @@ $offset = $circumference - ($confidence / 100 * $circumference);
 }
 .label { 
     font-size: 0.9rem; 
-    /* color removed here because .confidence-text sets it */ 
 }
 </style>
 
 
+
+
 <?php
-$aiOutput = $result['explanation'] ?? '';
-$instructionResult = '';
-$analysisResult = $aiOutput;
+    
+    $aiOutput = $result['explanation'] ?? '';
+    $instructionResult = '';
+    $analysisResult = $aiOutput;
 
-// Detect and separate instruction part
-if (strpos($aiOutput, 'User Instruction Result:') !== false && strpos($aiOutput, 'News Analysis Result:') !== false) {
-    $parts = explode('News Analysis Result:', $aiOutput);
-    $instructionResult = trim(str_replace('User Instruction Result:', '', $parts[0]));
-    $analysisResult = isset($parts[1]) ? trim($parts[1]) : '';
+    if (strpos($aiOutput, 'User Instruction Result:') !== false && strpos($aiOutput, 'News Analysis Result:') !== false) {
+        $parts = explode('News Analysis Result:', $aiOutput);
+        $instructionResult = trim(str_replace('User Instruction Result:', '', $parts[0]));
+        $analysisResult = isset($parts[1]) ? trim($parts[1]) : '';
 
-    // --- CLEAN INSTRUCTION RESULT ---
-    $lines = explode("\n", $instructionResult);
-    $lines = array_map(fn($line) => trim(str_replace('*','',$line)), $lines);
-    $lines = array_filter($lines, fn($line) => !empty($line));
-    $instructionResult = implode("\n", $lines);
+        // --- CLEAN INSTRUCTION RESULT ---
+        $lines = explode("\n", $instructionResult);
+        $lines = array_map(fn($line) => trim(str_replace(['*','#'], '', $line)), $lines);
+        $lines = array_filter($lines, fn($line) => !empty($line));
+        $instructionResult = implode("\n", $lines);
 
-    // --- CLEAN ANALYSIS RESULT ---
-    $lines = explode("\n", $analysisResult);
-    $lines = array_map(fn($line) => trim(str_replace('*','',$line)), $lines);
-    $lines = array_filter($lines, fn($line) => !empty($line));
-    $analysisResult = implode("\n", $lines);
-}
-?>
-
-
-<!-- 🧭 USER INSTRUCTION RESULT (only shown if available) -->
-<?php if (!empty($instructionResult)): ?>
-<div class="instruction-result" style="margin-top: 20px; font-family: 'Inter', sans-serif;">
-  <h3 style="
-    font-size: 1.4rem;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #059669;
-    font-weight: 600;
-  ">
-    <i class="fas fa-lightbulb"></i> User Instruction Result
-  </h3>
-  <div style="overflow-x: hidden; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6; color: #064e3b;">
-    <?php 
-        // Render HTML links properly without escaping
-        echo $instructionResult; 
+        // --- CLEAN ANALYSIS RESULT ---
+        $lines = explode("\n", $analysisResult);
+        $lines = array_map(fn($line) => trim(str_replace(['*','#'], '', $line)), $lines);
+        $lines = array_filter($lines, fn($line) => !empty($line));
+        $analysisResult = implode("\n", $lines);
+    }
     ?>
-  </div>
-</div>
-<?php endif; ?>
+
+    <!-- 🧭 USER INSTRUCTION RESULT (only shown if available) -->
+    <?php if (!empty($instructionResult)): ?>
+    <div class="instruction-result" style="margin-top: 20px; font-family: 'Inter', sans-serif;">
+      <h3 style="
+        font-size: 1.4rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #059669;
+        font-weight: 600;
+      ">
+        <i class="fas fa-lightbulb"></i> User Instruction 
+      </h3>
+      <div style="overflow-x: hidden; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6; color: #064e3b;">
+        <?php echo $instructionResult; ?>
+      </div>
+    </div>
+    <?php endif; ?>
 
 
 <!-- 🧠 AI ANALYSIS RESULT -->

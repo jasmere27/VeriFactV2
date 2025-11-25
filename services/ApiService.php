@@ -4,6 +4,8 @@ class ApiService {
     private $baseUrl;
     private $tesseractPath;
 
+    
+
     public function __construct() {
         require_once __DIR__ . '/../config.php';
         $this->baseUrl = API_BASE_URL;
@@ -18,30 +20,30 @@ class ApiService {
 
     /** Analyze text content **/
     public function analyzeText($text) {
-    try {
-        $url = $this->baseUrl . '/isFakeNews';
-        $data = ['news' => $text];
+        try {
+            $url = $this->baseUrl . '/isFakeNews';
+            $data = ['news' => $text];
 
-        $response = $this->makeRequest($url, 'POST', $data);
+            $response = $this->makeRequest($url, 'POST', $data);
 
-        if ($response === false) {
-            throw new Exception('Failed to connect to AI service');
+            if ($response === false) {
+                throw new Exception('Failed to connect to AI service');
+            }
+
+            return $this->parseResponse($response, 'text');
+
+        } catch (Exception $e) {
+            error_log('Text analysis error: ' . $e->getMessage());
+            return [
+                'error' => true,
+                'message' => 'Failed to analyze text: ' . $e->getMessage()
+            ];
         }
-
-        return $this->parseResponse($response, 'text');
-
-    } catch (Exception $e) {
-        error_log('Text analysis error: ' . $e->getMessage());
-        return [
-            'error' => true,
-            'message' => 'Failed to analyze text: ' . $e->getMessage()
-        ];
     }
-}
 
-
-    /** Analyze image with local OCR **/
-    /** Analyze image with local OCR and optional user instruction */
+    /** 
+ * Analyze image using local OCR and optional user instruction 
+ */
 public function analyzeImageWithLocalOCR($imagePath, $userInstruction = null) {
     try {
         if (!file_exists($imagePath)) {
@@ -50,18 +52,14 @@ public function analyzeImageWithLocalOCR($imagePath, $userInstruction = null) {
 
         // Extract text using Tesseract OCR
         $command = "\"{$this->tesseractPath}\" " . escapeshellarg($imagePath) . " stdout 2>&1";
-        $ocrText = shell_exec($command);
-        $ocrText = trim($ocrText);
+        $ocrText = trim(shell_exec($command));
 
         if (empty($ocrText)) {
             throw new Exception('No text detected in image.');
         }
 
         // Combine OCR text with user instruction (if any)
-        $aiInput = $ocrText;
-        if (!empty($userInstruction)) {
-            $aiInput = "User Instruction Result: $userInstruction\n\nNews Analysis Result: $ocrText";
-        }
+        $aiInput = "User Instruction Result: " . ($userInstruction ?? "") . "\n\nNews Analysis Result: $ocrText";
 
         // Analyze combined input using text analysis method
         $analysisResult = $this->analyzeText($aiInput);
@@ -80,10 +78,10 @@ public function analyzeImageWithLocalOCR($imagePath, $userInstruction = null) {
     }
 }
 
-
-
-    /** Analyze image (remote) **/
-   public function analyzeImage($imageFile, $instruction = '') {
+/** 
+ * Analyze uploaded image remotely with optional user instruction 
+ */
+public function analyzeImage($imageFile, $instruction = '') {
     try {
         $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
         if (!in_array($imageFile['type'], $allowedTypes)) {
@@ -97,6 +95,7 @@ public function analyzeImageWithLocalOCR($imagePath, $userInstruction = null) {
         $url = $this->baseUrl . '/analyzeImage';
         $curlFile = new CURLFile($imageFile['tmp_name'], $imageFile['type'], $imageFile['name']);
 
+        // Always send instruction, even if empty
         $postData = [
             'file' => $curlFile,
             'instruction' => $instruction
@@ -125,7 +124,25 @@ public function analyzeImageWithLocalOCR($imagePath, $userInstruction = null) {
         }
 
         curl_close($ch);
-        return $this->parseResponse($response, 'image');
+
+        // Parse the AI response and handle User Instruction section
+        $parsed = $this->parseResponse($response, 'image');
+
+        // Ensure the explanation is clean and separated
+        if (!empty($parsed['explanation']) && strpos($parsed['explanation'], 'User Instruction Result:') !== false) {
+            $parts = explode('News Analysis Result:', $parsed['explanation']);
+            $instructionResult = trim(str_replace('User Instruction Result:', '', $parts[0]));
+            $analysisText = isset($parts[1]) ? trim($parts[1]) : '';
+
+            // Clean unnecessary symbols
+            $instructionResult = implode("\n", array_filter(array_map(fn($line) => trim(str_replace(['*','#'], '', $line)), explode("\n", $instructionResult))));
+            $analysisText = implode("\n", array_filter(array_map(fn($line) => trim(str_replace(['*','#'], '', $line)), explode("\n", $analysisText))));
+
+            $parsed['instruction_result'] = $instructionResult;
+            $parsed['analysis_result'] = $analysisText;
+        }
+
+        return $parsed;
 
     } catch (Exception $e) {
         error_log('Image analysis error: ' . $e->getMessage());
@@ -135,7 +152,6 @@ public function analyzeImageWithLocalOCR($imagePath, $userInstruction = null) {
         ];
     }
 }
-
 
     /** Analyze audio **/
     public function analyzeAudio($audioFile) {
@@ -170,97 +186,82 @@ public function analyzeImageWithLocalOCR($imagePath, $userInstruction = null) {
         }
     }
 
-    // Inside class ApiService
+    /** Fetch RSS feed safely **/
+    private function loadRSS($url) {
+        $content = @file_get_contents($url);
 
-/**
- * Fetch RSS feed safely
- */
-private function loadRSS($url) {
-    $content = @file_get_contents($url);
-
-    if (!$content) {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0");
-        $content = curl_exec($ch);
-        curl_close($ch);
-    }
-
-    return $content ? simplexml_load_string($content) : false;
-}
-
-/**
- * Get news from Google RSS based on a search query
- */
-private function getNews($query, $limit = 10) {
-    $rssURL = "https://news.google.com/rss/search?q=" . urlencode($query) . "&hl=en-PH&gl=PH&ceid=PH:en";
-    $rss = $this->loadRSS($rssURL);
-
-    $items = [];
-    if ($rss && isset($rss->channel->item)) {
-        foreach ($rss->channel->item as $item) {
-
-            // Try media:thumbnail first
-            $namespaces = $item->getNameSpaces(true);
-            $media = isset($namespaces['media']) ? $item->children($namespaces['media']) : null;
-            $image = (string)($media->thumbnail->attributes()->url ?? '');
-
-            // Fallback: extract image from description
-            if (!$image) {
-                preg_match('/<img[^>]+src=["\']([^"\']+)/', $item->description, $img);
-                $image = $img[1] ?? "assets/default-news.jpg";
-            }
-
-            $items[] = [
-                "title" => (string)$item->title,
-                "link"  => (string)$item->link,
-                "date"  => date("M d, Y", strtotime($item->pubDate)),
-                "image" => $image
-            ];
-
-            if (count($items) >= $limit) break;
+        if (!$content) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0");
+            $content = curl_exec($ch);
+            curl_close($ch);
         }
+
+        return $content ? simplexml_load_string($content) : false;
     }
 
-    // Fallback if no news
-    if (empty($items)) {
-        $items[] = [
-            "title" => "No news available",
-            "link" => "#",
-            "date" => "",
-            "image" => "assets/default-news.jpg"
+    /** Get news from Google RSS based on a search query **/
+    private function getNews($query, $limit = 10) {
+        $rssURL = "https://news.google.com/rss/search?q=" . urlencode($query) . "&hl=en-PH&gl=PH&ceid=PH:en";
+        $rss = $this->loadRSS($rssURL);
+
+        $items = [];
+        if ($rss && isset($rss->channel->item)) {
+            foreach ($rss->channel->item as $item) {
+                $namespaces = $item->getNameSpaces(true);
+                $media = isset($namespaces['media']) ? $item->children($namespaces['media']) : null;
+                $image = (string)($media->thumbnail->attributes()->url ?? '');
+
+                if (!$image) {
+                    preg_match('/<img[^>]+src=["\']([^"\']+)/', $item->description, $img);
+                    $image = $img[1] ?? "assets/default-news.jpg";
+                }
+
+                $items[] = [
+                    "title" => (string)$item->title,
+                    "link"  => (string)$item->link,
+                    "date"  => date("M d, Y", strtotime($item->pubDate)),
+                    "image" => $image
+                ];
+
+                if (count($items) >= $limit) break;
+            }
+        }
+
+        if (empty($items)) {
+            $items[] = [
+                "title" => "No news available",
+                "link" => "#",
+                "date" => "",
+                "image" => "assets/default-news.jpg"
+            ];
+        }
+
+        return $items;
+    }
+
+    /** Public method to get trending news by category **/
+    public function getTrendingNews($category = 'all') {
+        $categories = [
+            "all" => ["Philippines", "world news", "technology news", "politics"],
+            "ph" => ["Philippines"],
+            "world" => ["world news"],
+            "technology" => ["technology news"],
+            "politics" => ["politics"]
         ];
+
+        $result = [];
+        if (!isset($categories[$category])) {
+            $category = 'all';
+        }
+
+        foreach ($categories[$category] as $cat) {
+            $result = array_merge($result, $this->getNews($cat));
+        }
+
+        return $result;
     }
-
-    return $items;
-}
-
-/**
- * Public method to get trending news by category
- */
-public function getTrendingNews($category = 'all') {
-    $categories = [
-        "all" => ["Philippines", "world news", "technology news", "politics"],
-        "ph" => ["Philippines"],
-        "world" => ["world news"],
-        "technology" => ["technology news"],
-        "politics" => ["politics"]
-    ];
-
-    $result = [];
-    if (!isset($categories[$category])) {
-        $category = 'all';
-    }
-
-    foreach ($categories[$category] as $cat) {
-        $result = array_merge($result, $this->getNews($cat));
-    }
-
-    return $result;
-}
-
-
-
 
     /** Check API health **/
     public function checkHealth() {
@@ -304,7 +305,7 @@ public function getTrendingNews($category = 'all') {
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 180, // ⏱ Allow up to 3 minutes for large AI responses
+            CURLOPT_TIMEOUT => 180,
             CURLOPT_CONNECTTIMEOUT => 30,
             CURLOPT_TCP_KEEPALIVE => 1,
             CURLOPT_TCP_KEEPIDLE => 30,
@@ -368,7 +369,7 @@ public function getTrendingNews($category = 'all') {
         return [
             'is_fake' => $data['is_fake'] ?? false,
             'confidence' => $data['confidence'] ?? 0,
-            'explanation' => $data['explanation'] ?? 'Analysis completed.',
+            'explanation' => $this->cleanMarkdown($data['explanation'] ?? 'Analysis completed.'),
             'sources' => $data['sources'] ?? $this->getDefaultSources(),
             'cybersecurity_tips' => $this->getCybersecurityTips($type),
             'analysis_type' => $type,
@@ -378,21 +379,38 @@ public function getTrendingNews($category = 'all') {
 
     private function formatTextResponse($response, $type) {
         $response = trim($response);
+        $cleanedResponse = $this->cleanMarkdown($response);
+
         return [
-        'classification' => $this->determineClassification($response),
-        'is_fake' => $this->determineFakeStatus($response),
-        'confidence' => $this->extractConfidence($response),
-        'explanation' => $this->formatExplanation($response, $type),
-        'sources' => $this->getDefaultSources(),
-        'cybersecurity_tips' => $this->getCybersecurityTips($type),
-        'analysis_type' => $type,
-        'timestamp' => date('Y-m-d H:i:s'),
-        'raw_response' => $response
+            'classification' => $this->determineClassification($cleanedResponse),
+            'is_fake' => $this->determineFakeStatus($cleanedResponse),
+            'confidence' => $this->extractConfidence($cleanedResponse),
+            'explanation' => $this->formatExplanation($cleanedResponse, $type),
+            'sources' => $this->getDefaultSources(),
+            'cybersecurity_tips' => $this->getCybersecurityTips($type),
+            'analysis_type' => $type,
+            'timestamp' => date('Y-m-d H:i:s'),
+            'raw_response' => $cleanedResponse
         ];
     }
 
+    /** Helper: Clean Markdown and symbols **/
+    private function cleanMarkdown($text) {
+        // Remove headers (###, ##, #)
+        $text = preg_replace('/^#+\s*/m', '', $text);
 
-    
+        // Remove bold/italic markers **, __, *, _
+        $text = str_replace(['**', '__', '*', '_'], '', $text);
+
+        // Convert numbered lists to dash
+        $text = preg_replace('/^\s*\d+\.\s*/m', '- ', $text);
+
+        // Remove excessive whitespace
+        $text = preg_replace('/\n{2,}/', "\n\n", $text);
+
+        return trim($text);
+    }
+
     /** Helper: Fake detection **/
     private function determineFakeStatus($response) {
         $response = strtolower($response);
@@ -432,27 +450,25 @@ public function getTrendingNews($category = 'all') {
     }
 
     private function determineClassification($response) {
-    $response = strtolower($response);
+        $response = strtolower($response);
 
-    if (strpos($response, 'mixed') !== false) return 'mixed';
-    if (strpos($response, 'unverified') !== false) return 'unverified';
-    if (strpos($response, 'likely real') !== false) return 'real';
-    if (strpos($response, 'likely fake') !== false) return 'fake';
+        if (strpos($response, 'mixed') !== false) return 'mixed';
+        if (strpos($response, 'unverified') !== false) return 'unverified';
+        if (strpos($response, 'likely real') !== false) return 'real';
+        if (strpos($response, 'likely fake') !== false) return 'fake';
 
-    // If confidence keywords missing, fallback analysis
-    $fakeKeywords = ['fake', 'false', 'misleading', 'fabricated'];
-    $realKeywords = ['true', 'verified', 'authentic', 'accurate'];
+        $fakeKeywords = ['fake', 'false', 'misleading', 'fabricated'];
+        $realKeywords = ['true', 'verified', 'authentic', 'accurate'];
 
-    $fakeScore = count(array_filter($fakeKeywords, fn($w) => strpos($response, $w) !== false));
-    $realScore = count(array_filter($realKeywords, fn($w) => strpos($response, $w) !== false));
+        $fakeScore = count(array_filter($fakeKeywords, fn($w) => strpos($response, $w) !== false));
+        $realScore = count(array_filter($realKeywords, fn($w) => strpos($response, $w) !== false));
 
-    if ($fakeScore > 0 && $realScore > 0) return 'mixed';
-    if ($fakeScore > $realScore) return 'fake';
-    if ($realScore > $fakeScore) return 'real';
+        if ($fakeScore > 0 && $realScore > 0) return 'mixed';
+        if ($fakeScore > $realScore) return 'fake';
+        if ($realScore > $fakeScore) return 'real';
 
-    return 'unverified';
-}
-
+        return 'unverified';
+    }
 
     private function getDefaultSources() {
         return [
