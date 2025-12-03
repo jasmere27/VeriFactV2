@@ -21,7 +21,7 @@ class ApiService {
     /** Analyze text content **/
     public function analyzeText($text) {
     try {
-        $url = $this->baseUrl . '/api/v1/isFakeNews';
+        $url = $this->baseUrl . '/isFakeNews';
 
 
         // Backend requires: { "news": "string" }
@@ -107,11 +107,12 @@ public function analyzeImage($imageFile, $instruction = '') {
             throw new Exception('Invalid image type. Please upload JPG, PNG, or WebP files.');
         }
 
-        if ($imageFile['size'] > 10 * 1024 * 1024) {
-            throw new Exception('Image file too large. Maximum size is 10MB.');
-        }
+        if ($imageFile['size'] > 50 * 1024 * 1024) {
+                throw new Exception('Image file too large. Maximum size is 50MB.');
+            }
 
-        $url = $this->baseUrl . '/api/v1/analyzeImage';
+        $url = $this->baseUrl . '/analyzeImage';
+
         $curlFile = new CURLFile($imageFile['tmp_name'], $imageFile['type'], $imageFile['name']);
 
         // Always send instruction, even if empty
@@ -184,7 +185,7 @@ public function analyzeImage($imageFile, $instruction = '') {
                 throw new Exception('Audio file too large. Maximum size is 25MB.');
             }
 
-            $url = $this->baseUrl . '/api/v1/analyzeAudio';
+            $url = $this->baseUrl . '/analyzeAudio';
             $postData = [
                 'file' => new CURLFile($audioFile['tmp_name'], $audioFile['type'], $audioFile['name'])
             ];
