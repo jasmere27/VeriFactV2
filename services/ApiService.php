@@ -20,26 +20,45 @@ class ApiService {
 
     /** Analyze text content **/
     public function analyzeText($text) {
-        try {
-            $url = $this->baseUrl . '/isFakeNews';
-            $data = ['news' => $text];
+    try {
+        $url = $this->baseUrl . '/api/v1/isFakeNews';
 
-            $response = $this->makeRequest($url, 'POST', $data);
 
-            if ($response === false) {
-                throw new Exception('Failed to connect to AI service');
-            }
+        // Backend requires: { "news": "string" }
+        $data = json_encode(['news' => $text]);
 
-            return $this->parseResponse($response, 'text');
+        $headers = [
+            "Content-Type: application/json",
+            "Accept: application/json"
+        ];
 
-        } catch (Exception $e) {
-            error_log('Text analysis error: ' . $e->getMessage());
-            return [
-                'error' => true,
-                'message' => 'Failed to analyze text: ' . $e->getMessage()
-            ];
+        // Force POST + JSON body
+        $options = [
+            'http' => [
+                'method'  => 'POST',
+                'header'  => implode("\r\n", $headers),
+                'content' => $data,
+                'ignore_errors' => true 
+            ]
+        ];
+
+        $context = stream_context_create($options);
+        $response = file_get_contents($url, false, $context);
+
+        if ($response === false) {
+            throw new Exception('Failed to connect to AI service');
         }
+
+        return $this->parseResponse($response, 'text');
+
+    } catch (Exception $e) {
+        error_log('Text analysis error: ' . $e->getMessage());
+        return [
+            'error' => true,
+            'message' => 'Failed to analyze text: ' . $e->getMessage()
+        ];
     }
+}
 
     /** 
  * Analyze image using local OCR and optional user instruction 
@@ -92,7 +111,7 @@ public function analyzeImage($imageFile, $instruction = '') {
             throw new Exception('Image file too large. Maximum size is 10MB.');
         }
 
-        $url = $this->baseUrl . '/analyzeImage';
+        $url = $this->baseUrl . '/api/v1/analyzeImage';
         $curlFile = new CURLFile($imageFile['tmp_name'], $imageFile['type'], $imageFile['name']);
 
         // Always send instruction, even if empty
@@ -165,7 +184,7 @@ public function analyzeImage($imageFile, $instruction = '') {
                 throw new Exception('Audio file too large. Maximum size is 25MB.');
             }
 
-            $url = $this->baseUrl . '/analyzeAudio';
+            $url = $this->baseUrl . '/api/v1/analyzeAudio';
             $postData = [
                 'file' => new CURLFile($audioFile['tmp_name'], $audioFile['type'], $audioFile['name'])
             ];
@@ -435,7 +454,7 @@ public function analyzeImage($imageFile, $instruction = '') {
         if (strpos($lower, 'likely real') !== false) return 100;
         if (strpos($lower, 'likely fake') !== false) return 100;
         if (strpos($lower, 'likely mixed') !== false) return 50;
-        return 70;
+        return 100;
     }
 
     /** Helper: Explanation formatter **/
@@ -456,6 +475,8 @@ public function analyzeImage($imageFile, $instruction = '') {
         if (strpos($response, 'unverified') !== false) return 'unverified';
         if (strpos($response, 'likely real') !== false) return 'real';
         if (strpos($response, 'likely fake') !== false) return 'fake';
+        if (strpos($response, 'true') !== false) return 'real';
+
 
         $fakeKeywords = ['fake', 'false', 'misleading', 'fabricated'];
         $realKeywords = ['true', 'verified', 'authentic', 'accurate'];

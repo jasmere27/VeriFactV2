@@ -917,27 +917,32 @@ $classification = isset($result['classification']) ? strtolower($result['classif
 // Map AI classification to label and CSS class
 switch ($classification) {
     case 'fake':
-    case 'likely fake':
-        $label = 'Fake';
-        $class = 'fake';
-        break;
-    case 'real':
-    case 'likely real':
-        $label = 'Legit';
-        $class = 'legit';
-        break;
-    case 'mixed':
-        $label = 'Mixed';
-        $class = 'mixed';
-        $confidence = 50; // Ensure mixed is always 50%
-        break;
-    case 'uncertain':
-    case 'unverified':
-    default:
-        $label = 'Uncertain';
-        $class = 'uncertain';
-        $confidence = 0; // Uncertain/unverified always 0%
-        break;
+case 'likely fake':
+    $label = 'Fake';
+    $class = 'fake';
+    $confidence = 100;
+    break;
+
+case 'real':
+case 'likely real':
+    $label = 'Legit';
+    $class = 'legit';
+    $confidence = 100;
+    break;
+
+case 'mixed':
+    $label = 'Mixed';
+    $class = 'mixed';
+    $confidence = 50;
+    break;
+
+case 'uncertain':
+case 'unverified':
+default:
+    $label = 'Uncertain';
+    $class = 'uncertain';
+    $confidence = 0;
+    break;
 }
 
 // Circle calculations
@@ -964,10 +969,10 @@ $offset = $circumference - ($confidence / 100 * $circumference);
                 cy="60"
                 r="<?php echo $radius; ?>"
                 stroke-dasharray="<?php echo $circumference; ?>"
-                stroke-dashoffset="<?php echo $offset; ?>"
-                stroke="<?php echo ($class === 'mixed') ? 'url(#half-red-green)' : 'currentColor'; ?>">
+                stroke-dashoffset="<?php echo ($class === 'uncertain') ? 0 : $offset; ?>"
+                stroke="<?php echo ($class === 'mixed') ? 'url(#half-red-green)' : ($class === 'uncertain' ? '#999' : 'currentColor'); ?>">
             </circle>
-        </svg>
+                </svg>
         <div class="confidence-text">
             <?php if ($class === 'mixed' || $class === 'uncertain'): ?>
                 <span class="label"><?php echo $label; ?></span>
@@ -1025,9 +1030,6 @@ $offset = $circumference - ($confidence / 100 * $circumference);
 }
 </style>
 
-
-
-
 <?php
     
     $aiOutput = $result['explanation'] ?? '';
@@ -1053,220 +1055,225 @@ $offset = $circumference - ($confidence / 100 * $circumference);
     }
     ?>
 
-    <!-- 🧭 USER INSTRUCTION RESULT (only shown if available) -->
-    <?php if (!empty($instructionResult)): ?>
-    <div class="instruction-result" style="margin-top: 20px; font-family: 'Inter', sans-serif;">
-      <h3 style="
-        font-size: 1.4rem;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #059669;
-        font-weight: 600;
-      ">
-        <i class="fas fa-lightbulb"></i> User Instruction 
-      </h3>
-      <div style="overflow-x: hidden; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6; color: #064e3b;">
-        <?php echo $instructionResult; ?>
-      </div>
+    <!-- 🔹 RESULT MODAL -->
+<div class="result-modal" style="
+    font-family: 'Inter', 'Roboto', sans-serif;
+    background: linear-gradient(135deg, #ffffff, #f3f4f6);
+    border-radius: 16px;
+    padding: 24px 30px;
+    max-width: 900px;
+    margin: 30px auto;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+    color: #111827;
+">
+
+  <!-- 🧭 USER INSTRUCTION RESULT -->
+  <?php if (!empty($instructionResult)): ?>
+  <div class="instruction-result" style="
+      margin-bottom: 28px;
+      background: #f0fdf4;
+      border-left: 6px solid #059669;
+      border-radius: 12px;
+      padding: 20px 24px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  ">
+    <h3 style="font-size: 1.5rem; display: flex; align-items: center; gap: 10px; color: #059669; font-weight: 700;">
+      <i class="fas fa-lightbulb"></i> User Instruction
+    </h3>
+    <div style="line-height: 1.7; margin-top: 12px; color: #064e3b;">
+      <?php echo $instructionResult; ?>
     </div>
-    <?php endif; ?>
+  </div>
+  <?php endif; ?>
 
-
-<!-- 🧠 AI ANALYSIS RESULT -->
-<div class="result-explanation" id="aiAnalysis" style="margin-top: 25px; font-family: 'Inter', 'Roboto', sans-serif;">
+  <!-- 🧠 AI ANALYSIS RESULT -->
+<div class="result-explanation" id="aiAnalysis" style="
+    margin-top: 30px; 
+    font-family: 'Inter', 'Roboto', sans-serif;
+">
   <h3 style="
-    font-size: 1.4rem;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #1e40af;
-    font-weight: 600;
+      font-size: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #1e40af;
+      font-weight: 700;
   ">
     <i class="fas fa-brain"></i> AI Analysis
   </h3>
+
   <div id="analysisText" style="
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow-x: hidden;
-  background: #f9fafb;
-  padding: 18px;
-  border-radius: 10px;
-  max-height: 400px;
-  overflow-y: auto;
-  font-size: 1rem;
-  line-height: 1.6;
-  color: #111827;
-  border-left: 4px solid #2563eb;
-  font-family: 'Inter', 'Roboto Mono', monospace;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-">
-  <?php echo $analysisResult; ?>
+      background: #f9fafb;
+      padding: 25px 30px;
+      border-radius: 12px;
+      max-height: 500px;
+      overflow-y: auto;
+      font-size: 1.15rem;
+      font-family: 'Inter', 'Roboto', sans-serif;
+      font-weight: 400;
+      line-height: 1.8;
+      color: #111827;
+      border-left: 6px solid #2563eb;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      white-space: pre-wrap;
+      word-wrap: break-word;
+  ">
+      <?php 
+        if (!empty($analysisResult)) {
+            // Convert multiple line breaks to separate paragraphs
+            $paragraphs = preg_split("/\n\s*\n/", $analysisResult);
+            foreach ($paragraphs as $para) {
+                $para = trim($para);
+                if ($para !== '') {
+                    echo "<p style='margin-bottom:1.5rem;'>".htmlspecialchars($para)."</p>";
+                }
+            }
+        } else {
+            echo "<p>No analysis available.</p>";
+        }
+      ?>
   </div>
 </div>
 
-<!-- 🔈 SPEAK BUTTON -->
-<?php if(!empty($analysisResult)): ?>
-<div style="margin-top: 10px;">
-  <button id="speakBtn" onclick="speakResult()" style="
-    background: #2563eb;
-    color: white;
-    border: none;
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-size: 1rem;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    transition: background 0.3s;
-  " onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#2563eb'">
-    <i class="fas fa-volume-up"></i> Read Aloud
-  </button>
-</div>
-<?php endif; ?>
 
-<!-- 🔒 CYBERSECURITY TIPS -->
-<?php if (!empty($result['cybersecurity_tips'])): ?>
-<div class="cybersecurity-tips" style="margin-top: 20px; font-family: 'Inter', sans-serif;">
-  <button onclick="toggleTips()" class="dropdown-toggle" style="
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: none;
-    border: none;
-    font-size: 1.2rem;
-    color: #000000ff;
-    cursor: pointer;
-    font-weight: 600;
-  ">
-    <i class="fas fa-shield-alt" style="color: #f59e0b;"></i>
-    <span>Cybersecurity Tips (<?= ucfirst($result['type'] ?? 'General') ?>)</span>
-    <i id="arrowIcon" class="fas fa-chevron-down" style="transition: transform 0.3s;"></i>
-  </button>
+  <!-- 🔈 READ ALOUD BUTTON -->
+  <?php if (!empty($analysisResult)): ?>
+  <div style="margin-bottom: 28px;">
+    <button id="speakBtn" onclick="speakResult()" style="
+        background: #2563eb;
+        color: #fff;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 10px;
+        font-size: 1rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    " onmouseover="this.style.background='#1e3a8a'" onmouseout="this.style.background='#2563eb'">
+      <i class="fas fa-volume-up"></i> Read Aloud
+    </button>
+  </div>
+  <?php endif; ?>
 
-  <div id="tipsContent" style="
-    margin-top: 16px;
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.5s ease, opacity 0.3s ease;
-    opacity: 0;
-  ">
-    <div class="tips-grid" style="
-      display: grid;
-      gap: 16px;
-      background: rgba(245, 158, 11, 0.08);
-      border: 1px solid #f59e0b;
-      border-radius: 12px;
-      padding: 24px;
-    ">
-      <?php foreach ($result['cybersecurity_tips'] as $index => $tip): ?>
-      <div class="tip-card" style="
+  <!-- 🔒 CYBERSECURITY TIPS -->
+  <?php if (!empty($result['cybersecurity_tips'])): ?>
+  <div class="cybersecurity-tips" style="margin-bottom: 28px;">
+    <button onclick="toggleTips()" style="
         display: flex;
-        gap: 12px;
-        padding: 16px;
-        background: #fff8e1;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        align-items: center;
+        gap: 10px;
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        padding: 10px 16px;
+        border-radius: 12px;
+        font-size: 1.15rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    ">
+      <i class="fas fa-shield-alt" style="color: #f59e0b;"></i>
+      <span>Cybersecurity Tips (<?= ucfirst($result['type'] ?? 'General') ?>)</span>
+      <i id="arrowIcon" class="fas fa-chevron-down" style="margin-left:auto; transition: transform 0.3s;"></i>
+    </button>
+    <div id="tipsContent" style="
+        margin-top: 16px;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.5s ease, opacity 0.3s ease;
+        opacity: 0;
+    ">
+      <div class="tips-grid" style="
+          display: grid;
+          gap: 16px;
+          background: rgba(245, 158, 11, 0.08);
+          border: 1px solid #f59e0b;
+          border-radius: 12px;
+          padding: 20px;
       ">
-        <div class="tip-number" style="
-          width: 26px;
-          height: 26px;
-          background: linear-gradient(135deg, #f59e0b, #d97706);
-          border-radius: 50%;
+        <?php foreach ($result['cybersecurity_tips'] as $index => $tip): ?>
+        <div class="tip-card" style="
+            display: flex;
+            gap: 14px;
+            padding: 16px;
+            background: #fff8e1;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            align-items: flex-start;
+        ">
+          <div style="
+              width: 28px;
+              height: 28px;
+              background: linear-gradient(135deg, #f59e0b, #d97706);
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 14px;
+              font-weight: 700;
+              color: white;
+              flex-shrink: 0;
+          "><?php echo $index + 1; ?></div>
+          <div style="color: #374151; font-size: 0.95rem; line-height: 1.5;">
+            <?php echo htmlspecialchars($tip); ?>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+  </div>
+  <?php endif; ?>
+
+  <!-- ✅ TRUSTED SOURCES -->
+  <div class="trusted-sources" style="margin-bottom: 28px;">
+    <h3 style="display: flex; align-items: center; gap: 10px; font-size: 1.5rem; font-weight: 700; color: #1e40af;">
+      <i class="fas fa-check-circle" style="color: #22c55e;"></i> Trusted Sources
+    </h3>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px;">
+      <?php foreach ($result['sources'] as $source): ?>
+      <a href="<?php echo htmlspecialchars($source['url']); ?>" target="_blank" rel="noopener noreferrer" style="
           display: flex;
           align-items: center;
-          justify-content: center;
-          font-size: 13px;
-          font-weight: 700;
-          color: white;
-          flex-shrink: 0;
-        ">
-          <?php echo $index + 1; ?>
-        </div>
-        <div class="tip-content" style="color: #374151; font-size: 0.95rem;">
-          <p style="margin: 0;"><?php echo htmlspecialchars($tip); ?></p>
-        </div>
-      </div>
+          gap: 8px;
+          padding: 14px;
+          background: #e0f2fe;
+          border-radius: 12px;
+          border: 1.5px solid #0284c7;
+          color: #111827;
+          font-weight: 600;
+          text-decoration: none;
+          transition: all 0.3s ease;
+      " onmouseover="this.style.background='#bae6fd'; this.style.transform='translateY(-3px)';" onmouseout="this.style.background='#e0f2fe'; this.style.transform='none';">
+        <i class="fas fa-external-link-alt"></i>
+        <span><?php echo htmlspecialchars($source['name']); ?></span>
+      </a>
       <?php endforeach; ?>
     </div>
   </div>
-</div>
-<?php endif; ?>
 
-<!-- ✅ TRUSTED SOURCES -->
-<div class="trusted-sources" style="margin-top: 20px; font-family: 'Inter', sans-serif;">
-  <h3 style="
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #1e40af;
-    font-size: 1.4rem;
-    font-weight: 700;
-  ">
-    <i class="fas fa-check-circle" style="color: #22c55e;"></i> Trusted Sources
-  </h3>
-
-  <div class="sources-list" style="
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 14px;
-    margin-top: 16px;
-  ">
-    <?php foreach ($result['sources'] as $source): ?>
-    <a href="<?php echo htmlspecialchars($source['url']); ?>" target="_blank" rel="noopener noreferrer" class="source-link" style="
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px;
-      background: #e0f2fe;
-      border: 1.5px solid #0284c7;
-      border-radius: 10px;
-      color: #000000ff;
-      text-decoration: none;
-      font-weight: 600;
-      transition: all 0.3s ease;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    " onmouseover="this.style.background='#bae6fd'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='#e0f2fe'; this.style.transform='none';">
-      <i class="fas fa-external-link-alt"></i>
-      <span><?php echo htmlspecialchars($source['name']); ?></span>
-    </a>
-    <?php endforeach; ?>
-  </div>
-</div>
-
-<!-- Optional Hover Effect -->
-<style>
-    .source-link:hover {
-        background: var(--primary-blue);
-        color: white;
-        transform: translateY(-2px);
-    }
-    .source-link:hover i {
-        color: white;
-    }
-
-    
-</style>
-
-<!-- ✅ DOWNLOAD BUTTON -->
-<div style="margin-top: 24px; text-align: right;">
+  <!-- ✅ DOWNLOAD BUTTON -->
+  <div style="text-align: right;">
     <button onclick="downloadResult()" style="
-        background: blue;
-        border: none;
+        background: #2563eb;
         color: white;
-        padding: 10px 18px;
-        border-radius: 8px;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 10px;
         font-size: 1rem;
         cursor: pointer;
         display: inline-flex;
         align-items: center;
         gap: 8px;
-    ">
-        <i class="fas fa-download"></i> Download Result
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        transition: background 0.3s, transform 0.3s;
+    " onmouseover="this.style.background='#1e3a8a'; this.style.transform='translateY(-2px)';" onmouseout="this.style.background='#2563eb'; this.style.transform='none';">
+      <i class="fas fa-download"></i> Download Result
     </button>
-</div>
+  </div>
 
+</div>
 
 
 <!-- IMAGE ZOOM MODAL -->
