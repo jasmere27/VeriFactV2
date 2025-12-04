@@ -917,38 +917,38 @@ $classification = isset($result['classification']) ? strtolower($result['classif
 // Map AI classification to label and CSS class
 switch ($classification) {
     case 'fake':
-case 'likely fake':
-    $label = 'Fake';
-    $class = 'fake';
-    $confidence = 100;
-    break;
+        $label = 'Fake';
+        $class = 'fake';
+        if ($confidence <= 0) $confidence = 100; // default if AI didn't give confidence
+        break;
 
-case 'real':
-case 'likely real':
-    $label = 'Legit';
-    $class = 'legit';
-    $confidence = 100;
-    break;
+    case 'real':
+        $label = 'Legit';
+        $class = 'legit';
+        if ($confidence <= 0) $confidence = 100;
+        break;
 
-case 'mixed':
-    $label = 'Mixed';
-    $class = 'mixed';
-    $confidence = 50;
-    break;
+    case 'mixed':
+        $label = 'Mixed';
+        $class = 'mixed';
+        if ($confidence <= 0) $confidence = 50; // default for mixed if AI didn't provide
+        break;
 
-case 'uncertain':
-case 'unverified':
-default:
-    $label = 'Uncertain';
-    $class = 'uncertain';
-    $confidence = 0;
-    break;
+    case 'uncertain':
+    case 'unverified':
+    default:
+        $label = 'Uncertain';
+        $class = 'uncertain';
+        $confidence = 0;
+        break;
 }
 
 // Circle calculations
 $radius = 54;
 $circumference = 2 * M_PI * $radius;
-$offset = $circumference - ($confidence / 100 * $circumference);
+$offset = $circumference * (1 - ($confidence / 100)) - 0.5; // prevents clipping at 100%
+if ($offset < 0) $offset = 0;
+
 ?>
 
 <div class="confidence-display" style="display:flex; justify-content:center; margin: 1rem 0;">
@@ -972,7 +972,7 @@ $offset = $circumference - ($confidence / 100 * $circumference);
                 stroke-dashoffset="<?php echo ($class === 'uncertain') ? 0 : $offset; ?>"
                 stroke="<?php echo ($class === 'mixed') ? 'url(#half-red-green)' : ($class === 'uncertain' ? '#999' : 'currentColor'); ?>">
             </circle>
-                </svg>
+        </svg>
         <div class="confidence-text">
             <?php if ($class === 'mixed' || $class === 'uncertain'): ?>
                 <span class="label"><?php echo $label; ?></span>
@@ -985,49 +985,15 @@ $offset = $circumference - ($confidence / 100 * $circumference);
 </div>
 
 <style>
-.confidence-circle {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    font-weight: bold;
-    text-align: center;
-    color: black;
-    flex-direction: column;
-    background: black;
-}
-.confidence-circle.fake { color: red; }
-.confidence-circle.legit { color: green; }
-.confidence-circle.mixed { color: transparent; }
-.confidence-circle.uncertain { color: gray; }
-
-.progress-ring-bg {
-    fill: transparent;
-    stroke: #ddd;
-    stroke-width: 8;
-}
 .progress-ring-circle {
     fill: transparent;
     stroke-width: 8;
     transform: rotate(-90deg);
     transform-origin: 50% 50%;
     transition: stroke-dashoffset 1s ease-out;
+    stroke-linecap: butt; /* instead of round */
 }
-.confidence-text {
-    position: absolute;
-    text-align: center;
-    color: #000;
-}
-.percentage { 
-    font-size: 1.2rem; 
-    display: block; 
-}
-.label { 
-    font-size: 0.9rem; 
-}
+
 </style>
 
 <?php
